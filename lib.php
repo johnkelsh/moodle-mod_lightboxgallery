@@ -1,10 +1,39 @@
 <?php
 
-require_once($CFG->libdir . '/filelib.php');
-require_once('imageclass.php');
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-define('THUMB_WIDTH', 120);
-define('THUMB_HEIGHT', 105);
+
+/**
+ * Library of interface functions and constants for module newmodule
+ *
+ * All the core Moodle functions, neeeded to allow the module to work
+ * integrated in Moodle should be placed here.
+ * All the newmodule specific functions, needed to implement all the module
+ * logic, should go to locallib.php. This will help to save some memory when
+ * Moodle is performing actions across all modules.
+ *
+ * @package   mod_lightboxgallery
+ * @copyright 2011 John Kelsh
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
+
+defined('MOODLE_INTERNAL') || die();
+
+define('THUMB_WIDTH', 150);
+define('THUMB_HEIGHT', 150);
 define('MAX_IMAGE_LABEL', 13);
 define('MAX_COMMENT_PREVIEW', 20);
 
@@ -12,25 +41,46 @@ define('AUTO_RESIZE_SCREEN', 1);
 define('AUTO_RESIZE_UPLOAD', 2);
 define('AUTO_RESIZE_BOTH', 3);
 
-function lightboxgallery_add_instance($gallery) {
-    global $CFG;
 
-    if (! lightboxgallery_rss_enabled()) {
+require_once($CFG->libdir . '/filelib.php');
+require_once('imageclass.php');
+
+/**
+ * Given an object containing all the necessary data,
+ * (defined by the form in mod_form.php) this function
+ * will create a new instance and return the id number
+ * of the new instance.
+ *
+ * @param object $gallery An object from the form in mod_form.php
+ * @return int The id of the newly inserted newmodule record
+ */
+function lightboxgallery_add_instance($gallery) {
+    global $DB;
+
+    $gallery->timemodified = time();
+
+    if (!lightboxgallery_rss_enabled()) {
         $gallery->rss = 0;
     }
    
-    $gallery->timemodified = time();
-
-    return insert_record('lightboxgallery', $gallery);
+    return $DB->insert_record('lightboxgallery', $gallery);
 }
 
-
+/**
+ * Given an object containing all the necessary data,
+ * (defined by the form in mod_form.php) this function
+ * will update an existing instance with new data.
+ *
+ * @param object $gallery An object from the form in mod_form.php
+ * @return boolean Success/Fail
+ */
 function lightboxgallery_update_instance($gallery) {
-    global $CFG;
+    global $DB;
 
+    $gallery->timemodified = time();
     $gallery->id = $gallery->instance;
 
-    if (! lightboxgallery_rss_enabled()) {
+    if (!lightboxgallery_rss_enabled()) {
         $gallery->rss = 0;
     }
 
@@ -39,52 +89,83 @@ function lightboxgallery_update_instance($gallery) {
         $gallery->resize = 0;
     }
 
-    $gallery->timemodified = time();
-
-    return update_record('lightboxgallery', $gallery);
+    return $DB->update_record('lightboxgallery', $gallery);
 }
 
-
+/**
+ * Given an ID of an instance of this module,
+ * this function will permanently delete the instance
+ * and any data that depends on it.
+ *
+ * @param int $id Id of the module instance
+ * @return boolean Success/Failure
+ */
 function lightboxgallery_delete_instance($id) {
-    if ($gallery = get_record('lightboxgallery', 'id', $id)) {
-        $result = true;
+    global $DB;
 
-        $result = $result && delete_records('lightboxgallery', 'id', $gallery->id);
-        $result = $result && delete_records('lightboxgallery_comments', 'gallery', $gallery->id);
-        $result = $result && delete_records('lightboxgallery_image_meta', 'gallery', $gallery->id);
-
-    } else {
-        $result = false;
+    if (!$gallery = $DB->get_record('lightboxgallery', array('id' => $id))) {
+        return false;
     }
 
-    return $result;
+    $DB->delete_records('lightboxgallery', 'id', $gallery->id);
+    $DB->delete_records('lightboxgallery_comments', 'gallery', $gallery->id);
+    $DB->delete_records('lightboxgallery_image_meta', 'gallery', $gallery->id);
+
+    return true;
 }
 
+/**
+ * Return a small object with summary information about what a
+ * user has done with a given particular instance of this module
+ * Used for user activity reports.
+ * $return->time = the time they did it
+ * $return->info = a short text description
+ *
+ * @return null
+ * @todo Finish documenting this function
+ */
 function lightboxgallery_user_outline($course, $user, $mod, $resource) {
-    if ($logs = get_records_select('log', "userid='$user->id' AND module='lightboxgallery' AND action='view' AND info='$resource->id'", 'time ASC')) {
-        $numviews = count($logs);
+    global $DB;
+
+    $conditions = array('userid' => $user->id,  'module' => 'lightboxgallery', 'action' => 'view', 'info' => $resource->id);
+
+    if ($logs = $DB->get_records('log', $conditions, 'time ASC', '*', '0', '1')) {
+        $numviews = $DB->count_records('log', $conditions);
         $lastlog = array_pop($logs);
 
         $result = new object;
         $result->info = get_string('numviews', '', $numviews);
         $result->time = $lastlog->time;
+
         return $result;
+
     } else {
+
         return null;
+
     }
 }
 
+/**
+ * Print a detailed representation of what a user has done with
+ * a given particular instance of this module, for user activity reports.
+ *
+ * @return boolean
+ * @todo Finish documenting this function
+ */
 function lightboxgallery_user_complete($course, $user, $mod, $resource) {
-    global $CFG;
+    global $DB, $CFG;
 
-    if ($logs = get_records_select('log', "userid='$user->id' AND module='lightboxgallery' AND action='view' AND info='$resource->id'", 'time ASC')) {
-        $numviews = count($logs);
+    $conditions = array('userid' => $user->id,  'module' => 'lightboxgallery', 'action' => 'view', 'info' => $resource->id);
+
+    if ($logs = get_records('log', $conditions, 'time ASC', '*', '0', '1')) {
+        $numviews = $DB->count_records('log', $conditions);
         $lastlog = array_pop($logs);
 
         $strnumviews = get_string('numviews', '', $numviews);
         $strmostrecently = get_string('mostrecently');
 
-        echo("$strnumviews - $strmostrecently " . userdate($lastlog->time));
+        echo $strnumviews.' - '.$strmostrecently.' '.userdate($lastlog->time);
 
         $sql = "SELECT c.*
                   FROM {$CFG->prefix}lightboxgallery_comments c
@@ -93,7 +174,7 @@ function lightboxgallery_user_complete($course, $user, $mod, $resource) {
                  WHERE l.id = {$mod->instance} AND u.id = {$user->id}
               ORDER BY c.timemodified ASC";
 
-        if ($comments = get_records_sql($sql)) {
+        if ($comments = $DB->get_records_sql($sql)) {
             $cm = get_coursemodule_from_id('lightboxgallery', $mod->id);
             $context = get_context_instance(CONTEXT_MODULE, $cm->id);
             foreach ($comments as $comment) {
@@ -106,12 +187,12 @@ function lightboxgallery_user_complete($course, $user, $mod, $resource) {
 }
 
 function lightboxgallery_get_recent_mod_activity(&$activities, &$index, $timestart, $courseid, $cmid, $userid=0, $groupid=0) {
-    global $CFG, $COURSE;
+    global $DB, $CFG, $COURSE;
 
     if ($COURSE->id == $courseid) {
         $course = $COURSE;
     } else {
-        $course = get_record('course', 'id', $courseid);
+        $course = $DB->get_record('course', array('id' => $courseid));
     }
 
     $modinfo =& get_fast_modinfo($course);
@@ -126,7 +207,7 @@ function lightboxgallery_get_recent_mod_activity(&$activities, &$index, $timesta
                    " . ($userid ? "AND u.id = $userid" : '') . "
           ORDER BY c.timemodified ASC";
 
-    if ($comments = get_records_sql($sql)) {
+    if ($comments = $DB->get_records_sql($sql)) {
         foreach ($comments as $comment) {
             $display = lightboxgallery_resize_text(trim(strip_tags($comment->comment)), MAX_COMMENT_PREVIEW);
 
@@ -158,32 +239,30 @@ function lightboxgallery_get_recent_mod_activity(&$activities, &$index, $timesta
 function lightboxgallery_print_recent_mod_activity($activity, $courseid, $detail, $modnames, $viewfullnames) {
     global $CFG;
 
-    echo('<table border="0" cellpadding="3" cellspacing="0">');
-
-    echo('<tr><td class="userpicture" valign="top">' . print_user_picture($activity->user, $courseid, $activity->user->picture, 0, true) . '</td><td>');
-
-    echo('<div class="title">');
-
-    if ($detail) {
-        echo('<img src="' . $CFG->modpixpath . '/' . $activity->type. '/icon.gif" class="icon" alt="' . s($activity->name) . '" />');
-    }
-
-    echo('<a href="' . $CFG->wwwroot . '/mod/lightboxgallery/view.php?id=' . $activity->cmid . '#c' . $activity->content->id . '">' . $activity->content->comment . '</a>');
-
-    echo('</div>');
-
-    $fullname = fullname($activity->user, $viewfullnames);
-    echo('<div class="user">' .
-         ' <a href="' . $CFG->wwwroot . '/user/view.php?id=' . $activity->user->id . '&amp;course=' . $courseid . '"> ' . $fullname . '</a> - ' . userdate($activity->timestamp) .
-         '</div>');
-
-    echo('</td></tr></table>');
+    echo '<table border="0" cellpadding="3" cellspacing="0">'.
+         '<tr><td class="userpicture" valign="top">'.print_user_picture($activity->user, $courseid, $activity->user->picture, 0, true).'</td><td>'.
+         '<div class="title">'.
+         ($detail ? '<img src="'.$CFG->modpixpath.'/'.$activity->type.'/icon.gif" class="icon" alt="'.s($activity->name).'" />' : '').
+         '<a href="'.$CFG->wwwroot.'/mod/lightboxgallery/view.php?id='.$activity->cmid.'#c'.$activity->content->id.'">'.$activity->content->comment.'</a>'.
+         '</div>'.
+         '<div class="user">'.
+         ' <a href="'.$CFG->wwwroot.'/user/view.php?id='.$activity->user->id.'&amp;course='.$courseid.'"> '.fullname($activity->user, $viewfullnames).'</a> - '.userdate($activity->timestamp).
+         '</div>'.
+         '</td></tr></table>';
 
     return true;
 }
 
+/**
+ * Given a course and a time, this module should find recent activity
+ * that has occurred in newmodule activities and print it out.
+ * Return true if there was output, or false is there was none.
+ *
+ * @return boolean
+ * @todo Finish documenting this function
+ */
 function lightboxgallery_print_recent_activity($course, $viewfullnames, $timestart) {
-    global $CFG;
+    global $DB, $CFG, $OUTPUT;
 
     $sql = "SELECT c.*, l.name, u.firstname, u.lastname
               FROM {$CFG->prefix}lightboxgallery_comments c
@@ -192,39 +271,49 @@ function lightboxgallery_print_recent_activity($course, $viewfullnames, $timesta
              WHERE c.timemodified > $timestart AND l.course = {$course->id}
           ORDER BY c.timemodified ASC";
 
-    if ($comments = get_records_sql($sql)) {
-        print_headline(get_string('newgallerycomments', 'lightboxgallery').':', 3);
+    if ($comments = $DB->get_records_sql($sql)) {
+        echo $OUTPUT->heading(get_string('newgallerycomments', 'lightboxgallery').':', 3);
 
-        echo('<ul class="unlist">');
-
-        $strftimerecent = get_string('strftimerecent');
+        echo '<ul class="unlist">';
 
         foreach ($comments as $comment) {
             $display = lightboxgallery_resize_text(trim(strip_tags($comment->comment)), MAX_COMMENT_PREVIEW);
 
-            echo('<li>' .
-                 ' <div class="head">' .
-                 '  <div class="date">' . userdate($comment->timemodified, $strftimerecent) . '</div>' .
-                 '  <div class="name">' . fullname($comment, $viewfullnames) . ' - ' . format_string($comment->name) . '</div>' .
+            echo '<li>'.
+                 ' <div class="head">'.
+                 '  <div class="date">'.userdate($comment->timemodified, get_string('strftimerecent')).'</div>'.
+                 '  <div class="name">'.fullname($comment, $viewfullnames).' - '.format_string($comment->name).'</div>'.
                  ' </div>'.
                  ' <div class="info">'.
-                 '  "<a href="' . $CFG->wwwroot . '/mod/lightboxgallery/view.php?l=' . $comment->gallery . '#c' . $comment->id . '">' . $display . '</a>"' .
+                 '  "<a href="'.$CFG->wwwroot.'/mod/lightboxgallery/view.php?l='.$comment->gallery.'#c'.$comment->id.'">'.$display.'</a>"'.
                  ' </div>'.
-                 '</li>');
+                 '</li>';
         }
-        echo('</ul>');
+
+        echo '</ul>';
+
     }
 
     return true;
 }
 
+/**
+ * Must return an array of users who are participants for a given instance
+ * of newmodule. Must include every user involved in the instance,
+ * independient of his role (student, teacher, admin...). The returned
+ * objects must contain at least id property.
+ * See other modules as example.
+ *
+ * @param int $newmoduleid ID of an instance of this module
+ * @return boolean|array false if no participants, array of objects otherwise
+ */
 function lightboxgallery_get_participants($galleryid) {
-    global $CFG;
+    global $DB, $CFG;
 
-    return get_records_sql("SELECT DISTINCT u.id, u.id
-                              FROM {$CFG->prefix}user u,
-                                   {$CFG->prefix}lightboxgallery_comments c
-                             WHERE c.gallery = $galleryid AND u.id = c.userid");
+    return $DB->get_records_sql("SELECT DISTINCT u.id, u.id
+                                   FROM {$CFG->prefix}user u,
+                                        {$CFG->prefix}lightboxgallery_comments c
+                                  WHERE c.gallery = $galleryid AND u.id = c.userid");
 }
 
 function lightboxgallery_get_view_actions() {
@@ -267,108 +356,6 @@ function lightboxgallery_config_defaults() {
     }
 }
 
-function lightboxgallery_get_file_extension($filename) {
-    return strtolower(substr(strrchr($filename, '.'), 1));
-}
-
-function lightboxgallery_allowed_filetypes() {
-    return array('jpg', 'jpeg', 'gif', 'png');
-}
-
-function lightboxgallery_allowed_filetype($element) {
-    $extension = lightboxgallery_get_file_extension($element);
-    return in_array($extension, lightboxgallery_allowed_filetypes());
-}
-
-function lightboxgallery_directory_images($directory) {
-    $files = get_directory_list($directory, '', false, false, true);
-    return array_filter($files, 'lightboxgallery_allowed_filetype');
-}
-
-function lightboxgallery_get_image_url($galleryid, $image = false, $thumb = false) {
-    global $CFG;
-
-    $script = $CFG->wwwroot . '/mod/lightboxgallery/pic.php';
-    $path = $galleryid . ($image ? '/' . rawurlencode($image) : '');
-
-    if ($CFG->slasharguments) {
-        $url = $script . '/' . $path . ($thumb ? '?thumb=1' : '');
-    } else {
-        $url = $script . '?file=/' . $path . ($thumb ? '&amp;thumb=1' : '');
-    }
-
-    return $url;
-}
-
-function lightboxgallery_make_img_tag($path, $imageid = '') {
-    return '<img src="' . $path . '" alt="" ' . (! empty($imageid) ? 'id="' . $imageid . '"' : '' )  . ' />';
-}
-
-function lightboxgallery_image_thumbnail($courseid, $gallery, $file, $forcenew = false) {
-    global $CFG;
-
-    $fallback = '['.$file.']';
-
-    $oldpath = $CFG->dataroot.'/'.$courseid.'/'.$gallery->folder.'/'.$file;
-    $newpath = $CFG->dataroot.'/'.$courseid.'/'.$gallery->folder.'/_thumb/'.$file.'.jpg';
-
-    if ($forcenew || !file_exists($newpath)) {
-        $thumb = new lightboxgallery_edit_image($oldpath);
-        if (! $thumb->create_thumbnail()) {
-            return $fallback;
-        }
-    }
-
-    return lightboxgallery_make_img_tag(lightboxgallery_get_image_url($gallery->id, $file, true));
-}
-
-function lightboxgallery_index_thumbnail($courseid, $gallery, $file = '') {
-    global $CFG;
-
-    $gallerypath = $CFG->dataroot . '/' . $courseid . '/' . $gallery->folder;
-
-    $indexpath = $gallerypath . '/_thumb/index.png';
-
-    $webpath = $courseid . '/' . $gallery->folder . '/_thumb/index.png';
-
-    if (! file_exists($indexpath) || ! empty($file)) {
-
-        if (empty($file)) {
-            if (! $images = lightboxgallery_directory_images($gallerypath)) {
-                return;
-            }
-            $file = $images[0];           
-        }
-
-        $thumbpath = $gallerypath . '/_thumb/' . $file . '.jpg';
-
-        if (! file_exists($thumbpath)) {
-            $thumbparent = new lightboxgallery_edit_image($gallerypath . '/' . $file);
-            if (! $thumbparent->create_thumbnail()) {
-                return;
-            }
-        }
-
-        $base = new lightboxgallery_edit_image('index.png');
-        $thumb = new lightboxgallery_edit_image($thumbpath);
-
-        $transparent = imagecolorat($base->image, 0, 0);
-
-        $shrunk = imagerotate($thumb->resize(48, 48, 0, 0, true), 351, $transparent, 0);
-
-        imagecolortransparent($base->image, $transparent);
-
-        imagecopy($base->image, $shrunk, 2, 3, 0, 0, imagesx($shrunk), imagesy($shrunk));
-
-        if (! $base->save_image($base->image, $indexpath)) {
-            return;
-        }
-
-    }
-
-    return lightboxgallery_make_img_tag($CFG->wwwroot . '/file.php' . ($CFG->slasharguments ? '/' : '?file=/') . $webpath);
-}
-
 function lightboxgallery_resize_text($text, $length) {
     $textlib = textlib_get_instance();
     return ($textlib->strlen($text) > $length ? $textlib->substr($text, 0, $length) . '...' : $text);
@@ -379,36 +366,23 @@ function lightboxgallery_resize_label($label) {
 }
 
 function lightboxgallery_print_comment($comment, $context) {
-    global $CFG, $COURSE;
+    global $DB, $CFG, $COURSE, $OUTPUT;
 
-    $user = get_record('user', 'id', $comment->userid);
+    $user = $DB->get_record('user', array('id' => $comment->userid));
 
-    echo('<table cellspacing="0" width="50%" class="boxaligncenter datacomment forumpost">');
-
-    echo('<tr class="header"><td class="picture left">' . print_user_picture($user, $COURSE->id, $user->picture, 0, true) . '</td>');
-
-    echo('<td class="topic starter" align="left"><a name="c' . $comment->id . '"></a><div class="author">');
-    echo('<a href="'.$CFG->wwwroot.'/user/view.php?id='.$user->id.'&amp;course='.$COURSE->id.'">' . fullname($user, has_capability('moodle/site:viewfullnames', $context)) . '</a> - '.userdate($comment->timemodified));
-    echo('</div></td></tr>');
-
-    echo('<tr><td class="left side">');
-    if ($groups = user_group($COURSE->id, $user->id)) {
-        print_group_picture($groups, $COURSE->id, false, false, true);
-    } else {
-        echo('&nbsp;');
-    }
-
-    echo('</td><td class="content" align="left">');
-
-    echo(format_text($comment->comment, FORMAT_MOODLE));
-
-    echo('<div class="commands">');
-    if (has_capability('mod/lightboxgallery:edit', $context)) {
-        echo('<a href="'.$CFG->wwwroot.'/mod/lightboxgallery/comment.php?id='.$comment->gallery.'&amp;delete='.$comment->id.'">'.get_string('delete').'</a>');
-    }
-    echo('</div>');
-
-    echo('</td></tr></table>');
+    echo '<table cellspacing="0" width="50%" class="boxaligncenter datacomment forumpost">'.
+         '<tr class="header"><td class="picture left">'.$OUTPUT->user_picture($user, array('courseid' => $COURSE->id)).'</td>'.
+         '<td class="topic starter" align="left"><a name="c'.$comment->id.'"></a><div class="author">'.
+         '<a href="'.$CFG->wwwroot.'/user/view.php?id='.$user->id.'&amp;course='.$COURSE->id.'">'.fullname($user, has_capability('moodle/site:viewfullnames', $context)).'</a> - '.userdate($comment->timemodified).
+         '</div></td></tr>'.
+         '<tr><td class="left side">'.
+//         ($groups = user_group($COURSE->id, $user->id) ? print_group_picture($groups, $COURSE->id, false, false, true) : '&nbsp;').
+         '</td><td class="content" align="left">'.
+         format_text($comment->comment, FORMAT_MOODLE).
+         '<div class="commands">'.
+         (has_capability('mod/lightboxgallery:edit', $context) ? '<a href="'.$CFG->wwwroot.'/mod/lightboxgallery/comment.php?id='.$comment->gallery.'&amp;delete='.$comment->id.'">'.get_string('delete').'</a>' : '').
+         '</div>'.
+         '</td></tr></table>';
 }
 
 function lightboxgallery_image_modified($file) {
@@ -423,28 +397,6 @@ function lightboxgallery_image_modified($file) {
         $timestamp = filemtime($file);
     }
     return date('d/m/y H:i', $timestamp);
-}
-
-function lightboxgallery_image_info($file) {
-    $result = new object;
-    $result->filesize  = display_size(filesize($file));
-    $result->modified  = lightboxgallery_image_modified($file);
-    $result->imagesize = getimagesize($file);
-    return $result;
-}
-
-function lightboxgallery_set_image_caption($galleryid, $image, $caption) {
-    if ($oldcaption = get_record('lightboxgallery_image_meta', 'metatype', 'caption', 'gallery', $galleryid, 'image', $image)) {
-        $oldcaption->description = $caption;
-        return update_record('lightboxgallery_image_meta', $oldcaption);
-    } else if (trim($caption) != '') {
-        $newcaption = new object;
-        $newcaption->gallery = $galleryid;
-        $newcaption->image = $image;
-        $newcaption->metatype = 'caption';
-        $newcaption->description = $caption;
-        return insert_record('lightboxgallery_image_meta', $newcaption);
-    }
 }
 
 function lightboxgallery_edit_types($showall = false) {
@@ -466,27 +418,28 @@ function lightboxgallery_edit_types($showall = false) {
 }
 
 function lightboxgallery_print_tags($heading, $tags, $courseid, $galleryid) {
-    global $CFG;
+    global $CFG, $OUTPUT;
 
-    print_simple_box_start('center');
+    echo $OUTPUT->box_start();
 
-    echo('<form action="search.php" style="float: right; margin-left: 4px;">' .
-         ' <fieldset class="invisiblefieldset">' . 
-         '  <input type="hidden" name="id" value="' . $courseid . '" />' .
-         '  <input type="hidden" name="l" value="' . $galleryid . '" />' .
-         '  <input type="text" name="search" size="8" />' .
-         '  <input type="submit" value="' . get_string('search') . '" />' .
-         ' </fieldset>' .
-         '</form>');
+    echo '<form action="search.php" style="float: right; margin-left: 4px;">'.
+         ' <fieldset class="invisiblefieldset">'.
+         '  <input type="hidden" name="id" value="'.$courseid.'" />'.
+         '  <input type="hidden" name="l" value="'.$galleryid.'" />'.
+         '  <input type="text" name="search" size="8" />'.
+         '  <input type="submit" value="'.get_string('search').'" />'.
+         ' </fieldset>'.
+         '</form>'.
+         $heading.': ';
 
-    echo($heading . ': ');
     $tagarray = array();
     foreach ($tags as $tag) {
-        $tagarray[] = '<a class="taglink" href="' . $CFG->wwwroot . '/mod/lightboxgallery/search.php?id=' . $courseid . '&amp;l=' . $galleryid . '&amp;search=' . urlencode(stripslashes($tag->description)) . '">' . s($tag->description) . '</a>';
+        $tagarray[] = '<a class="taglink" href="'.$CFG->wwwroot.'/mod/lightboxgallery/search.php?id='.$courseid.'&amp;gallery='.$galleryid.'&amp;search='.urlencode(stripslashes($tag->description)).'">'.s($tag->description).'</a>';
     }
-    echo(implode(', ', $tagarray));
 
-    print_simple_box_end();
+    echo implode(', ', $tagarray);
+
+    echo $OUTPUT->box_end();
 }
 
 function lightboxgallery_resize_options() {
@@ -499,28 +452,40 @@ function lightboxgallery_rss_enabled() {
     return ($CFG->enablerssfeeds && get_config('lightboxgallery', 'enablerssfeeds'));
 }
 
-function lightboxgallery_print_js_config($autoresize) {
-    global $CFG;
-
-    $resizetoscreen = (int)in_array($autoresize, array(AUTO_RESIZE_SCREEN, AUTO_RESIZE_BOTH));
-
-    $jsconf = array(
-        'resizetoscreen' => $resizetoscreen,
-        'download' => get_string('imagedownload', 'lightboxgallery'),
-        'forcedownload' => $CFG->slasharguments ? '?' : '&'
-    );
-
-    $jsconfvalues = array();
-
-    foreach ($jsconf as $key => $value) {
-        $jsconfvalues[] = "$key: '$value'";
-    }
-
-    echo('<script type="text/javascript">
-           //<![CDATA[
-             lightboxgallery_config = {' . implode(', ', $jsconfvalues) . '};
-           //]]>
-         </script>');
+function lightboxgallery_resize_upload($filename, $dimensions) {
+    list($width, $height) = explode('x', $dimensions);
+    $image = new lightboxgallery_edit_image($filename);
+    return $image->resize($width, $height);
 }
 
-?>
+/**
+ * Serves gallery images and other files.
+ *
+ * @param object $course
+ * @param object $cm
+ * @param object $context
+ * @param string $filearea
+ * @param array $args
+ * @param bool $forcedownload
+ * @return bool false if file not found, does not return if found - just send the file
+ */
+function lightboxgallery_pluginfile($course, $cm, $context, $filearea, $args, $forcedownload) {
+    global $CFG, $DB, $USER;
+
+    require_once($CFG->libdir.'/filelib.php');
+    require_login($course, false, $cm);
+
+    $relativepath = implode('/', $args);
+    $fullpath = '/'.$context->id.'/mod_lightboxgallery/'.$filearea.'/'.$relativepath;
+
+    $fs = get_file_storage();
+    if (!$file = $fs->get_file_by_hash(sha1($fullpath)) or $file->is_directory()) {
+        return false;
+    }
+
+    send_stored_file($file, 0, 0, true); // download MUST be forced - security!
+
+    return;
+
+}
+

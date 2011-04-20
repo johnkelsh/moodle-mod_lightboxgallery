@@ -9,20 +9,14 @@ class edit_base {
     var $tab;
     var $showthumb;
 
-    function edit_base($_gallery, $_image, $_tab, $_deletethumb = false, $_showthumb = true) {
+    function edit_base($_gallery, $_cm, $_image, $_tab, $_showthumb = true) {
         global $CFG;
 
         $this->gallery = $_gallery;
+        $this->cm = $_cm;
         $this->image = $_image;
         $this->tab = $_tab;
         $this->showthumb = $_showthumb;
-
-        if ($_deletethumb && $this->processing()) {
-            $thumb = $CFG->dataroot.'/'.$_gallery->course.'/'.$_gallery->folder.'/_thumb/'.$_image.'.jpg';
-            @unlink($thumb);
-        }
-
-        $this->imageobj = new lightboxgallery_edit_image($CFG->dataroot.'/'.$_gallery->course.'/'.$_gallery->folder.'/'.$_image);
     }
 
     function processing() {
@@ -35,7 +29,7 @@ class edit_base {
         return '<form action="'.$CFG->wwwroot.'/mod/lightboxgallery/imageedit.php" method="post">'.
                '<fieldset class="invisiblefieldset">'.
                '<input type="hidden" name="sesskey" value="'.$USER->sesskey.'" />'.
-               '<input type="hidden" name="id" value="'.$this->gallery->id.'" />'.
+               '<input type="hidden" name="id" value="'.$this->cm->id.'" />'.
                '<input type="hidden" name="image" value="'.$this->image.'" />'.
                '<input type="hidden" name="tab" value="'.$this->tab.'" />'.
                '<input type="hidden" name="process" value="1" />'.$text.'</fieldset></form>';

@@ -1,127 +1,116 @@
 <?php
 
-    require_once('../../config.php');
-    require_once('lib.php');
-    require_once('edit/base.class.php');
+require_once('../../config.php');
+require_once('lib.php');
+require_once('edit/base.class.php');
 
-    $id = required_param('id', PARAM_INT);
-    $image = required_param('image', PARAM_PATH);
-    $tab = optional_param('tab', '', PARAM_TEXT);
-    $page = optional_param('page', 0, PARAM_INT);
+global $DB;
 
-    if (! $gallery = get_record('lightboxgallery', 'id', $id)) {
-        error('Course module is incorrect');
+$id = required_param('id', PARAM_INT);
+$image = required_param('image', PARAM_PATH);
+$tab = optional_param('tab', '', PARAM_TEXT);
+$page = optional_param('page', 0, PARAM_INT);
+
+$cm      = get_coursemodule_from_id('lightboxgallery', $id, 0, false, MUST_EXIST);
+$course  = $DB->get_record('course', array('id' => $cm->course), '*', MUST_EXIST);
+$gallery = $DB->get_record('lightboxgallery', array('id' => $cm->instance), '*', MUST_EXIST);
+
+require_login($course->id);
+
+$context = get_context_instance(CONTEXT_MODULE, $cm->id);
+require_capability('mod/lightboxgallery:edit', $context);
+
+$PAGE->set_url('/mod/lightboxgallery/imageedit.php', array('id' => $cm->id, 'image' => $image, 'tab' => $tab, 'page' => $page));
+$PAGE->set_title($gallery->name);
+$PAGE->set_heading($course->shortname);
+$PAGE->set_button($OUTPUT->single_button($CFG->wwwroot.'/mod/lightboxgallery/view.php?id='.$id.'&page='.$page, get_string('backtogallery','lightboxgallery')));
+
+$edittypes = lightboxgallery_edit_types();
+
+$tabs = array();
+foreach ($edittypes as $type => $name) {
+    $tabs[] = new tabObject($type, $CFG->wwwroot.'/mod/lightboxgallery/imageedit.php?id='.$cm->id.'&amp;image='.$image.'&amp;page='.$page.'&amp;tab='.$type, $name);
+}
+
+if (!in_array($tab, array_keys($edittypes))) {
+    $types = array_keys($edittypes);
+    $tab = $types[0];
+}
+
+require($CFG->dirroot.'/mod/lightboxgallery/edit/'.$tab.'/'.$tab.'.class.php');
+$editclass = 'edit_'.$tab;
+$editinstance = new $editclass($gallery, $cm, $image, $tab);
+
+$fs = get_file_storage();
+if (!$stored_file = $fs->get_file($cm->id, 'mod_lightboxgallery', 'gallery_images', '0', '/', $image)) {
+    print_error(get_string('errornofile', 'lightboxgallery', $image), $galleryurl);
+}
+
+if ($editinstance->processing() && confirm_sesskey()) {
+    add_to_log($course->id, 'lightboxgallery', 'editimage', 'view.php?id='.$cm->id, $tab.' '.$image, $cm->id, $USER->id);
+    $editinstance->process_form();
+    redirect($CFG->wwwroot.'/mod/lightboxgallery/imageedit.php?id='.$cm->id.'&image='.$image.'&tab='.$tab);
+}
+
+$image = new lightboxgallery_image($stored_file, $gallery, $cm);
+
+$table = new html_table();
+$table->width = '*';
+
+if ($editinstance->showthumb) {
+    $table->attributes = array('style' => 'margin-left:auto;margin-right:auto;');
+    $table->align = array('center', 'center');
+    $table->size = array('*', '*');
+    $table->data[] = array('<img src="'.$image->get_thumbnail_url().'" alt="" /><br /><span title="'.$image->get_image_caption().'">'.$image->get_image_caption().'</span>', $editinstance->output($image->get_image_caption()));
+} else {
+    $table->align = array('center');
+    $table->size = array('*');
+    $table->data[] = array($editinstance->output($image->get_image_caption()));
+}
+
+echo $OUTPUT->header();
+
+print_tabs(array($tabs), $tab);
+
+echo html_writer::table($table);
+
+/* to be re-implemented at a later stage
+$dataroot = $CFG->dataroot.'/'.$course->id.'/'.$gallery->folder;
+if ($dirimages = lightboxgallery_directory_images($dataroot)) {
+    sort($dirimages);
+    $options = array();
+    foreach ($dirimages as $dirimage) {
+        $options[$dirimage] = $dirimage;
     }
-    if (! $course = get_record('course', 'id', $gallery->course)) {
-        error('Course is misconfigured');
+    $index = array_search($image, $dirimages);
+
+    echo('<table class="boxaligncenter menubar">
+            <tr>');
+    if ($index > 0) {
+        echo('<td>');
+        print_single_button($CFG->wwwroot.'/mod/lightboxgallery/imageedit.php', array('id' => $gallery->id, 'tab' => $tab, 'page' => $page, 'image' => $dirimages[$index - 1]), '←');
+        echo('</td>');
     }
-    if (! $cm = get_coursemodule_from_instance('lightboxgallery', $gallery->id, $course->id)) {
-        error('Course Module ID was incorrect');
+    echo('<td>
+            <form method="get" action="'.$CFG->wwwroot.'/mod/lightboxgallery/imageedit.php">
+              <fieldset class="invisiblefieldset">
+              <input type="hidden" name="id" value="'.$gallery->id.'" />
+              <input type="hidden" name="tab" value="'.$tab.'" />
+              <input type="hidden" name="page" value="'.$page.'" />');
+    choose_from_menu($options, 'image', $image, null, 'submit()');
+    echo('  </fieldset>
+            </form>
+          </td>');
+    if ($index < count($dirimages) - 1) {
+        echo('<td>');
+        print_single_button($CFG->wwwroot.'/mod/lightboxgallery/imageedit.php', array('id' => $gallery->id, 'tab' => $tab, 'page' => $page, 'image' => $dirimages[$index + 1]), '→');
+        echo('</td>');
     }
+    echo('  </tr>
+          </table>');
+}
+*/
 
-    if (get_config('lightboxgallery', 'strictfilenames')) {
-        $image = clean_param($image, PARAM_CLEANFILE);
-    }
-
-    require_login($course->id);
-
-    $context = get_context_instance(CONTEXT_MODULE, $cm->id);
-    require_capability('mod/lightboxgallery:edit', $context);
-
-    $edittypes = lightboxgallery_edit_types();
-
-    $tabs = array();
-    foreach ($edittypes as $type => $name) {
-        $tabs[] = new tabObject($type, $CFG->wwwroot.'/mod/lightboxgallery/imageedit.php?id='.$gallery->id.'&amp;image='.$image.'&amp;page='.$page.'&amp;tab='.$type, $name);
-    }
-
-    if (!in_array($tab, array_keys($edittypes))) {
-        $types = array_keys($edittypes);
-        $tab = $types[0];
-    }
-
-    $galleryurl = $CFG->wwwroot.'/mod/lightboxgallery/view.php?id='.$cm->id.'&amp;page='.$page.'&amp;editing=1';
-
-    $navlinks = array();
-    $navlinks[] = array('name' => get_string('editimage', 'lightboxgallery'), 'link' => '', 'type' => 'misc');
-    $navlinks[] = array('name' => get_string('edit_' . $tab, 'lightboxgallery'), 'link' => '', 'type' => 'misc');
-
-    $navigation = build_navigation($navlinks, $cm);
-
-    $button = print_single_button($CFG->wwwroot.'/mod/lightboxgallery/view.php', array('id' => $cm->id, 'page' => $page, 'editing' => '1'), get_string('backtogallery', 'lightboxgallery'), 'get', '', true);
-
-    print_header($course->shortname.': '.$gallery->name.': '.$image, $course->fullname, $navigation, '', '', true, $button, navmenu($course, $cm));
-
-    echo('<br />');
-
-    print_tabs(array($tabs), $tab);
-
-    require($CFG->dirroot.'/mod/lightboxgallery/edit/'.$tab.'/'.$tab.'.class.php');
-    $editclass = 'edit_'.$tab;
-    $editinstance = new $editclass($gallery, $image, $tab);
-
-    if (! file_exists($editinstance->imageobj->filename)) {
-        error(get_string('errornofile', 'lightboxgallery', $image), $galleryurl);
-    }
-
-    if ($editinstance->processing() && confirm_sesskey()) {
-        add_to_log($course->id, 'lightboxgallery', 'editimage', 'view.php?id='.$cm->id, $tab.' '.$image, $cm->id, $USER->id);
-        $editinstance->process_form();
-        redirect($CFG->wwwroot.'/mod/lightboxgallery/imageedit.php?id='.$gallery->id.'&amp;image='.$image.'&amp;tab='.$tab);
-    }
-
-    $table = new object;
-    $table->width = '*';
-
-    if ($editinstance->showthumb) {
-        $imagelabel = lightboxgallery_resize_label($image);
-
-        $table->align = array('center', 'center');
-        $table->size = array('*', '*');
-        $table->data[] = array(lightboxgallery_image_thumbnail($course->id, $gallery, $image).'<br /><span title="'.$image.'">'.$imagelabel.'</span>', $editinstance->output());
-    } else {
-        $table->align = array('center');
-        $table->size = array('*');
-        $table->data[] = array($editinstance->output());
-    }
-
-    print_table($table);
-
-    $dataroot = $CFG->dataroot.'/'.$course->id.'/'.$gallery->folder;
-    if ($dirimages = lightboxgallery_directory_images($dataroot)) {
-        sort($dirimages);
-        $options = array();
-        foreach ($dirimages as $dirimage) {
-            $options[$dirimage] = $dirimage;
-        }
-        $index = array_search($image, $dirimages);
-
-        echo('<table class="boxaligncenter menubar">
-                <tr>');
-        if ($index > 0) {
-            echo('<td>');
-            print_single_button($CFG->wwwroot.'/mod/lightboxgallery/imageedit.php', array('id' => $gallery->id, 'tab' => $tab, 'page' => $page, 'image' => $dirimages[$index - 1]), '←');
-            echo('</td>');
-        }
-        echo('<td>
-                <form method="get" action="'.$CFG->wwwroot.'/mod/lightboxgallery/imageedit.php">
-                  <fieldset class="invisiblefieldset">
-                  <input type="hidden" name="id" value="'.$gallery->id.'" />
-                  <input type="hidden" name="tab" value="'.$tab.'" />
-                  <input type="hidden" name="page" value="'.$page.'" />');
-        choose_from_menu($options, 'image', $image, null, 'submit()');
-        echo('  </fieldset>
-                </form>
-              </td>');
-        if ($index < count($dirimages) - 1) {
-            echo('<td>');
-            print_single_button($CFG->wwwroot.'/mod/lightboxgallery/imageedit.php', array('id' => $gallery->id, 'tab' => $tab, 'page' => $page, 'image' => $dirimages[$index + 1]), '→');
-            echo('</td>');
-        }
-        echo('  </tr>
-              </table>');
-    }
-   
-    print_footer($course);
+echo $OUTPUT->footer();
 
 ?>

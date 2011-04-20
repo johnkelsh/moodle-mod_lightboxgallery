@@ -1,156 +1,83 @@
 <?php
 
-    require_once('../../config.php');
-    require_once('lib.php');
-    require_once('imageadd_form.php');
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-    $id = required_param('id', PARAM_INT);
 
-    if (! $gallery = get_record('lightboxgallery', 'id', $id)) {
-        error('Course module is incorrect');
-    }
-    if (! $course = get_record('course', 'id', $gallery->course)) {
-        error('Course is misconfigured');
-    }
-    if (! $cm = get_coursemodule_from_instance('lightboxgallery', $gallery->id, $course->id)) {
-        error('Course Module ID was incorrect');
-    }
+/**
+ * This is a one-line short description of the file
+ *
+ * You can have a rather longer description of the file as well,
+ * if you like, and it can span multiple lines.
+ *
+ * @package   mod_lightworkgallery
+ * @copyright 2011 John Kelsh
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
-    function lightboxgallery_resize_upload($filename, $dimensions) {
-        list($width, $height) = explode('x', $dimensions);
-        $image = new lightboxgallery_edit_image($filename);
-        return $image->resize($width, $height);
-    }
+require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
+require_once(dirname(__FILE__).'/lib.php');
+require_once(dirname(__FILE__).'/imageadd_form.php');
 
-    require_login($course->id);
+$id = required_param('id', PARAM_INT);
 
-    $context = get_context_instance(CONTEXT_MODULE, $cm->id);
-    require_capability('mod/lightboxgallery:addimage', $context);
+$cm         = get_coursemodule_from_id('lightboxgallery', $id, 0, false, MUST_EXIST);
+$course     = $DB->get_record('course', array('id' => $cm->course), '*', MUST_EXIST);
+$gallery    = $DB->get_record('lightboxgallery', array('id' => $cm->instance), '*', MUST_EXIST);
 
-    $galleryurl = $CFG->wwwroot . '/mod/lightboxgallery/view.php?id=' . $cm->id;
+require_login($course->id);
 
-    $straddimage = get_string('addimage', 'lightboxgallery');
+$context = get_context_instance(CONTEXT_MODULE, $cm->id);
+require_capability('mod/lightboxgallery:addimage', $context);
 
-    $navigation = build_navigation($straddimage, $cm);
+$PAGE->set_url('/mod/lightboxgallery/view.php', array('id' => $cm->id));
+$PAGE->set_title($gallery->name);
+$PAGE->set_heading($course->shortname);
+$PAGE->set_button(update_module_button($cm->id, $course->id, get_string('modulename', 'lightboxgallery')));
 
-    print_header($course->shortname . ': ' . $gallery->name . ': ' . $straddimage, $course->fullname, $navigation, '', '', true, '&nbsp;', navmenu($course, $cm));
+$mform = new mod_lightboxgallery_imageadd_form(null, array('id' => $cm->id));
 
-    $mform = new mod_lightboxgallery_imageadd_form(null, $gallery);
+if ($mform->is_cancelled()) {
+    redirect($CFG->wwwroot.'/mod/lightboxgallery/view.php?id='.$cm->id);
 
-    if ($mform->is_cancelled()) {
-        redirect($galleryurl);
-    } else if (($formdata = $mform->get_data()) && confirm_sesskey()) {
-        require_once($CFG->dirroot . '/lib/uploadlib.php');
+} else if (($formdata = $mform->get_data()) && confirm_sesskey()) {
+    require_once($CFG->dirroot . '/lib/uploadlib.php');
 
-        $handlecollisions = !get_config('lightboxgallery', 'overwritefiles');
-        $um = new upload_manager('attachment', false, $handlecollisions, $course);
+    $filename = $mform->get_new_filename('image');
 
-        $uploaddir = $course->id . '/' . $gallery->folder;
+    $fileinfo = array(
+        'contextid'     => $cm->id,
+        'component'     => 'mod_lightboxgallery',
+        'filearea'      => 'gallery_images',
+        'itemid'        => 0,
+        'filepath'      => '/',
+        'filename'      => $filename);
 
-        if ($um->process_file_uploads($uploaddir)) {
-            $folder = $CFG->dataroot . '/' . $uploaddir;
-            $filename = $um->get_new_filename();
+    $fs = get_file_storage();
+    $stored_file = $fs->create_file_from_string($fileinfo, $mform->get_file_content('image'));
 
-            $messages = array();
+    $image = new lightboxgallery_image($stored_file, $gallery, $cm);
+    $image->set_caption($filename);
 
-            if (lightboxgallery_get_file_extension($filename) == 'zip') {
-                $thumb = '<img src="' . $CFG->pixpath . '/f/zip.gif" class="icon" alt="zip" />';
+    redirect($CFG->wwwroot.'/mod/lightboxgallery/view.php?id='.$cm->id);
 
-                $before = lightboxgallery_directory_images($folder);
+}
 
-                if (unzip_file($folder .  '/' . $filename, $folder, false)) {
-                    $messages[] = get_string('zipextracted', 'lightboxgallery', $filename);
+echo $OUTPUT->header();
 
-                    $after = lightboxgallery_directory_images($folder);
+$mform->display();
 
-                    if ($newfiles = array_diff($after, $before)) {
+echo $OUTPUT->footer();
 
-                        $resizeoption = 0;
-
-                        if (in_array($gallery->autoresize, array(AUTO_RESIZE_UPLOAD, AUTO_RESIZE_BOTH))) {
-                            $resizeoption = $gallery->resize;
-                        } else if (isset($formdata->resize))  {
-                            $resizeoption = $formdata->resize;
-                        }
-
-                        foreach ($newfiles as $newfile) {
-                            if ($resizeoption > 0) {
-                                $resizeoptions = lightboxgallery_resize_options();
-                                if (lightboxgallery_resize_upload($folder . '/' . $newfile, $resizeoptions[$resizeoption])) {
-                                    $messages[] = get_string('imageresized', 'lightboxgallery', $newfile);
-                                } else {
-                                    $messages[] = $newfile;
-                                }
-                            } else {
-                                $messages[] = $newfile;
-                            }                        
-                        }
-                    } else {
-                        $messages[] = get_string('zipnonewfiles', 'lightboxgallery');
-                    }
-
-                } else {
-                    $messages[] = get_string('errorunzippingfiles', 'error');
-                }
-
-            } else if (lightboxgallery_allowed_filetype($filename)) {
-
-                $uploadedimage = new lightboxgallery_edit_image($folder . '/' . $filename);
-
-                $thumb = lightboxgallery_image_thumbnail($course->id, $gallery, $filename, true) . '<br />' . $filename;
-                $messages[] = get_string('imageuploaded', 'lightboxgallery', $filename);
-
-                if (isset($formdata->caption) && trim($formdata->caption) != '') {
-                    lightboxgallery_set_image_caption($gallery->id, $filename, $formdata->caption);
-                    $messages[] = get_string('edit_caption', 'lightboxgallery') . ': ' . s($formdata->caption, true);
-                }
-
-                $resizeoption = 0;
-
-                if (in_array($gallery->autoresize, array(AUTO_RESIZE_UPLOAD, AUTO_RESIZE_BOTH))) {
-                    $resizeoption = $gallery->resize;
-                } else if (isset($formdata->resize))  {
-                    $resizeoption = $formdata->resize;
-                }
-
-                if ($resizeoption > 0) {
-                    $resizeoptions = lightboxgallery_resize_options();
-                    list($width, $height) = explode('x', $resizeoptions[$resizeoption]);
-                    if ($uploadedimage->resize($width, $height)) {
-                        $messages[] = get_string('imageresized', 'lightboxgallery', $resizeoptions[$resizeoption]);
-                    }
-                }
-
-                if (has_capability('mod/lightboxgallery:edit', $context)) {
-                    $messages[] = '<a href="' . $CFG->wwwroot . '/mod/lightboxgallery/imageedit.php?id=' . $gallery->id . '&amp;image=' .  $filename . '">' . get_string('editimage', 'lightboxgallery') . '</a>';
-                }
-
-            } else {
-                unlink($CFG->dataroot . '/' . $uploaddir . '/' . $filename);
-                error(get_string('erroruploadimage', 'lightboxgallery') . ' (' . implode(', ', lightboxgallery_allowed_filetypes()) . ')', $CFG->wwwroot . '/mod/lightboxgallery/imageadd.php?id=' . $gallery->id);
-            }
-
-            $table = new object;
-            $table->width = '*';
-            $table->align = array('center', 'left');
-
-            $table->data[] = array($thumb, '<ul id="messages"><li>' . implode('</li><li>', $messages) . '</li></ul>');
-
-            echo('<br />');
-
-            print_table($table);
-
-            echo('<br />');
-
-            add_to_log($course->id, 'lightboxgallery', 'addimage', 'view.php?id='.$cm->id, $filename, $cm->id, $USER->id);;
-
-        }
-    }
-
-    echo('<div style="margin-left: auto; margin-right: auto; font-size: 0.8em; width: 635px;">');
-    $mform->display();
-    echo('</div>');
-
-    print_footer($course);
-
-?>

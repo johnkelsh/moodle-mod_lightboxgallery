@@ -2,8 +2,8 @@
 
 class edit_rotate extends edit_base {
 
-    function edit_rotate($gallery, $image, $tab) {
-        parent::edit_base($gallery, $image, $tab, true);      
+    function __construct($gallery, $image, $cm, $tab) {
+        parent::edit_base($gallery, $image, $cm, $tab, true);      
     }
 
     function output() {
@@ -19,9 +19,11 @@ class edit_rotate extends edit_base {
     function process_form() {
         $angle = required_param('angle', PARAM_INT);
 
-        $rotated = imagerotate($this->imageobj->image, $angle, 0);
-        $this->imageobj->save_image($rotated);
+        $fs = get_file_storage();
+        $stored_file = $fs->get_file($this->cm->id, 'mod_lightboxgallery', 'gallery_images', '0', '/', $this->image);
+        $image = new lightboxgallery_image($stored_file, $this->gallery, $this->cm);
 
+        $image->rotate_image($angle);
     }
 
 }

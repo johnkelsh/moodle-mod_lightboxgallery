@@ -2,31 +2,24 @@
 
 class edit_caption extends edit_base {
 
-    function output() {
-        if ($caption = $this->get_caption_object()) {
-            $captiontext = $caption->description;
-        } else {
-            $captiontext = '';
-        }
+    function __construct($gallery, $cm, $image, $tab) {
+        parent::edit_base($gallery, $cm, $image, $tab, true);
+    }
 
+    function output($captiontext = '') {
         $result = '<textarea name="caption" cols="24" rows="4">'.$captiontext.'</textarea><br /><br />'.
-                  '<input type="submit" value="'.get_string('update').'" />&nbsp;<input type="submit" name="remove" value="'.get_string('remove').'" />';
+                  '<input type="submit" value="'.get_string('update').'" />';
         return $this->enclose_in_form($result);        
     }
 
     function process_form() {
         $caption = required_param('caption', PARAM_NOTAGS);
 
-        $remove = optional_param('remove', '', PARAM_TEXT);
-        if ($remove) {
-            delete_records('lightboxgallery_image_meta', 'metatype', 'caption', 'gallery', $this->gallery->id, 'image', $this->image);
-        } else {
-            lightboxgallery_set_image_caption($this->gallery->id, $this->image, $caption);
-        }
-    }
+        $fs = get_file_storage();
+        $stored_file = $fs->get_file($this->cm->id, 'mod_lightboxgallery', 'gallery_images', '0', '/', $this->image);
+        $image = new lightboxgallery_image($stored_file, $this->gallery, $this->cm);
 
-    function get_caption_object() {
-        return get_record('lightboxgallery_image_meta', 'metatype', 'caption', 'gallery', $this->gallery->id, 'image', $this->image);
+        $image->set_caption($caption);
     }
 
 }

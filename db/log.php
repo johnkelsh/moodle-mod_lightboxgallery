@@ -15,12 +15,11 @@
 // You should have received a copy of the GNU General Public License
 // along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-
 /**
- * Defines the version of newmodule
- *
- * This code fragment is called by moodle_needs_upgrading() and
- * /admin/index.php
+ * Definition of log events
+ * NOTE: this is an example how to insert log event during installation/update.
+ * It is not really essential to know about it, but these logs were created as example
+ * in the previous 1.9 NEWMODULE.
  *
  * @package   mod_lightboxgallery
  * @copyright 2011 John Kelsh
@@ -29,7 +28,11 @@
 
 defined('MOODLE_INTERNAL') || die();
 
-$module->version  = 2011040800;  // The current module version (Date: YYYYMMDDXX)
-$module->requires = 2010122500;  // Requires this Moodle version
-$module->cron     = 0;           // Period for cron to check this module (secs)
+global $DB;
+
+$logs = array(
+    array('module'=>'lightboxgallery', 'action'=>'update', 'mtable'=>'lightboxgallery', 'field'=>'name'),
+    array('module'=>'lightboxgallery', 'action'=>'view', 'mtable'=>'lightboxgallery', 'field'=>'name'),
+    array('module'=>'lightboxgallery', 'action'=>'comment', 'mtable'=>'lightboxgallery', 'field'=>'name')
+);
 
