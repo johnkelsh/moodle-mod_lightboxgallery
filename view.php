@@ -17,10 +17,7 @@
 
 
 /**
- * Prints a particular instance of newmodule
- *
- * You can have a rather longer description of the file as well,
- * if you like, and it can span multiple lines.
+ * Prints a particular instance of lightboxgallery
  *
  * @package   mod_lightboxgallery
  * @copyright 2011 John Kelsh
@@ -28,10 +25,10 @@
  */
 
 require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
-require_once(dirname(__FILE__).'/lib.php');
+require_once(dirname(__FILE__).'/locallib.php');
 
-require_once($CFG->libdir . '/filelib.php');
-require_once($CFG->libdir . '/rsslib.php');
+require_once($CFG->libdir.'/filelib.php');
+require_once($CFG->libdir.'/rsslib.php');
 require_once(dirname(__FILE__).'/imageclass.php');
 
 global $DB;

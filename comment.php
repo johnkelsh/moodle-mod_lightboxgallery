@@ -1,8 +1,8 @@
 <?php
 
-require_once('../../config.php');
-require_once('lib.php');
-require_once('comment_form.php');
+require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
+require_once(dirname(__FILE__).'/locallib.php');
+require_once(dirname(__FILE__).'/comment_form.php');
 
 $id      = required_param('id', PARAM_INT);
 $delete  = optional_param('delete', 0, PARAM_INT);

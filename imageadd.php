@@ -17,10 +17,7 @@
 
 
 /**
- * This is a one-line short description of the file
- *
- * You can have a rather longer description of the file as well,
- * if you like, and it can span multiple lines.
+ * A page for uploading new images
  *
  * @package   mod_lightworkgallery
  * @copyright 2011 John Kelsh
@@ -28,7 +25,6 @@
  */
 
 require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
-require_once(dirname(__FILE__).'/lib.php');
 require_once(dirname(__FILE__).'/imageadd_form.php');
 
 $id = required_param('id', PARAM_INT);

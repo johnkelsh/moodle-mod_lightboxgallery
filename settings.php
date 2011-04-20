@@ -1,48 +1,49 @@
-<?php 
+<?php
 
-    require_once($CFG->dirroot . '/mod/lightboxgallery/lib.php');
+// This file is part of Moodle - http://moodle.org/
+//
+// Moodle is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// Moodle is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with Moodle.  If not, see <http://www.gnu.org/licenses/>.
 
-    /* Disabled Plugins */
 
-    $options = lightboxgallery_edit_types(true);
+/**
+ * Global settings page for lightboxgallery
+ *
+ * @package   mod_lightboxgallery
+ * @copyright 2010 John Kelsh
+ * @license   http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
+ */
 
-    $disableplugins = new admin_setting_configmulticheckbox('disabledplugins', get_string('configdisabledplugins', 'lightboxgallery'), get_string('configdisabledpluginsdesc', 'lightboxgallery'), array(), $options);
-    $disableplugins->plugin = 'lightboxgallery';
+require_once(dirname(__FILE__).'/locallib.php');
 
-    $settings->add($disableplugins);
+/* Disabled Plugins */
 
-    /* Enable RSS Feeds */
+$options = lightboxgallery_edit_types(true);
 
-    $description = get_string('configenablerssfeedsdesc', 'lightboxgallery');
+$disableplugins = new admin_setting_configmulticheckbox('disabledplugins', get_string('configdisabledplugins', 'lightboxgallery'), get_string('configdisabledpluginsdesc', 'lightboxgallery'), array(), $options);
+$disableplugins->plugin = 'lightboxgallery';
 
-    if (empty($CFG->enablerssfeeds)) {
-        $description .= ' (' . get_string('configenablerssfeedsdisabled2', 'admin') . ')';
-    }
+$settings->add($disableplugins);
 
-    $enablerss = new admin_setting_configcheckbox('enablerssfeeds', get_string('configenablerssfeeds', 'lightboxgallery'), $description, 0);
-    $enablerss->plugin = 'lightboxgallery';
+/* Enable RSS Feeds */
 
-    $settings->add($enablerss);
+$description = get_string('configenablerssfeedsdesc', 'lightboxgallery');
 
-    /* Strict filenames */
+if (empty($CFG->enablerssfeeds)) {
+    $description .= ' (' . get_string('configenablerssfeedsdisabled2', 'admin') . ')';
+}
 
-    $strictfilenames = new admin_setting_configcheckbox('strictfilenames', get_string('configstrictfilenames', 'lightboxgallery'), get_string('configstrictfilenamesdesc', 'lightboxgallery'), 0);
-    $strictfilenames->plugin = 'lightboxgallery';
+$enablerss = new admin_setting_configcheckbox('enablerssfeeds', get_string('configenablerssfeeds', 'lightboxgallery'), $description, 0);
+$enablerss->plugin = 'lightboxgallery';
 
-    $settings->add($strictfilenames);
-
-    /* Overwrite existing files */
-
-    $overwritefiles = new admin_setting_configcheckbox('overwritefiles', get_string('configoverwritefiles', 'lightboxgallery'), get_string('configoverwritefilesdesc', 'lightboxgallery'), 1);
-    $overwritefiles->plugin = 'lightboxgallery';
-
-    $settings->add($overwritefiles);
-
-    /* Thumbnail cache lifetime */
-
-    $imagelifetime = new admin_setting_configtext('imagelifetime', get_string('configimagelifetime', 'lightboxgallery'), get_string('configimagelifetimedesc', 'lightboxgallery'), '86400', PARAM_INT, 6);
-    $imagelifetime->plugin = 'lightboxgallery';
-
-    $settings->add($imagelifetime);
-
-?>
+$settings->add($enablerss);
