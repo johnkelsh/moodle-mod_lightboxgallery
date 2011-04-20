@@ -1,0 +1,34 @@
+Moodle Lightbox Gallery v2.2.1 (12th May 09)
+
+ * INSTALLATION *
+
+To install this plugin, upload the lightboxgallery folder and it's contents into your /mod folder in
+your Moodle install. After uploading, login as admin and visit your Admin/Notifications page (you'll
+find this page at http://yoursite.com/moodle/admin/index.php), which will setup the required database
+tables and complete the installation.
+
+After installation you'll find an extra item on your resources menu when editing a page. In an English
+install of Moodle it will be named 'Add a lightbox gallery', this could differ for other languages.
+
+ * UPGRADING *
+
+If you are upgrading this plugin from a previous version, you should copy the contents of this archive
+over your previous version. You MUST then visit your Admin/Notification page - at which point Moodle
+will complete the upgrade to the current version.
+
+Please note that after upgrading to version 2.1 the folder 'edittype' in the root of the lightbox
+gallery install folder can be safely removed (it's been renamed to 'edit').
+
+After upgrading to version 2.2 you can safely remove the 'css', 'images' and 'js' folders (the content
+of these folders has been moved into the new 'scripts' folder).
+
+This plugin was designed for Moodle version 1.9 and upwards
+
+ * HOMEPAGE *
+
+http://moodle.greenhead.ac.uk/external/lightbox_gallery/ 
+
+ * CONTACT *
+
+Paul Holden 
+pholden[at]greenhead[dot]ac[dot]uk
