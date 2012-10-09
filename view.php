@@ -27,6 +27,7 @@
 require_once(dirname(dirname(dirname(__FILE__))).'/config.php');
 require_once(dirname(__FILE__).'/locallib.php');
 
+require_once($CFG->libdir.'/completionlib.php');
 require_once($CFG->libdir.'/filelib.php');
 require_once($CFG->libdir.'/rsslib.php');
 require_once(dirname(__FILE__).'/imageclass.php');
@@ -61,6 +62,10 @@ if ($editing) {
 lightboxgallery_config_defaults();
 
 add_to_log($course->id, 'lightboxgallery', 'view', 'view.php?id='.$cm->id.'&page='.$page, $gallery->id, $cm->id, $userid);
+
+// Mark viewed
+$completion = new completion_info($course);
+$completion->set_module_viewed($cm);
 
 $PAGE->set_url('/mod/lightboxgallery/view.php', array('id' => $cm->id));
 $PAGE->set_title($gallery->name);
